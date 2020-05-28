@@ -5,6 +5,8 @@ import android.os.AsyncTask
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
+import android.view.Menu
+import android.view.MenuItem
 import android.widget.ListView
 import kotlinx.android.synthetic.main.activity_main.*
 import java.net.URL
@@ -31,10 +33,16 @@ class FeedEntry {
 //
 //
 //}
-
+private const val STATE_CURRENT_LINK = "PendingOperation"
+private const val STATE_FEEDLIMIT_STORED = "FeedLimit_State"
 class MainActivity : AppCompatActivity() {
     private val TAG = "MainActivity"
-    private val downloadData by lazy {  DownloadData(this, xmlListView) }
+    private var downloadData: DownloadData? = null
+
+
+    private var feedUrl: String = "http://ax.itunes.apple.com/WebObjects/MZStoreServices.woa/ws/RSS/topfreeapplications/limit=%d/xml"
+    private var feedLimit = 10
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,14 +60,58 @@ class MainActivity : AppCompatActivity() {
 //        helloTxt.setOnClickListener(View.OnClickListener {  })
 
         setContentView(R.layout.activity_main)
-        Log.d(TAG, "onCreate Called")
-        downloadData.execute("http://ax.itunes.apple.com/WebObjects/MZStoreServices.woa/ws/RSS/topfreeapplications/limit=10/xml")
-        Log.d(TAG, "onCreate: done")
+        Log.d(TAG,"onCreate done")
+    }
+
+    private fun downloadUrl(feedUrl: String) {
+        Log.d(TAG, "downloadUrl starting AsyncTask")
+        downloadData = DownloadData(this, xmlListView)
+        downloadData?.execute(feedUrl)
+        Log.d(TAG, "downloadUrl done")
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        downloadUrl(feedUrl.format(feedLimit))
+        menuInflater.inflate(R.menu.feeds_menu, menu)
+        if (feedLimit == 10) {
+            menu?.findItem(R.id.mnu10)?.isChecked = true
+        } else {
+            menu?.findItem(R.id.mnu25)?.isChecked = true
+        }
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+
+
+        when (item.itemId) {
+            R.id.mnuFree ->
+                feedUrl = "http://ax.itunes.apple.com/WebObjects/MZStoreServices.woa/ws/RSS/topfreeapplications/limit=%d/xml"
+            R.id.mnuPaid ->
+                feedUrl = "http://ax.itunes.apple.com/WebObjects/MZStoreServices.woa/ws/RSS/toppaidapplications/limit=%d/xml"
+            R.id.mnuSongs ->
+                feedUrl = "http://ax.itunes.apple.com/WebObjects/MZStoreServices.woa/ws/RSS/topsongs/limit=%d/xml"
+            R.id.mnuRefresh ->
+                downloadUrl(feedUrl.format(feedLimit))
+            R.id.mnu10, R.id.mnu25 -> {
+                if (!item.isChecked) {
+                    item.isChecked = true
+                    feedLimit = 35 - feedLimit
+                    Log.d(TAG, "onOptionsItemSelected: ${item.title} setting feedLimit to $feedLimit")
+                } else {
+                    Log.d(TAG, "onOptionsItemSelected: ${item.title} setting feedLimit unchanged")
+                }
+            }
+            else ->
+                return super.onOptionsItemSelected(item)
+        }
+        downloadUrl(feedUrl.format(feedLimit))
+        return true
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        downloadData.cancel(true)
+        downloadData?.cancel(true)
     }
 
     companion object {
@@ -148,5 +200,17 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        feedLimit = savedInstanceState.getInt(STATE_FEEDLIMIT_STORED.toString())
+        Log.d(TAG, "$feedLimit")
+        feedUrl = savedInstanceState.getString(STATE_CURRENT_LINK, "http://ax.itunes.apple.com/WebObjects/MZStoreServices.woa/ws/RSS/topfreeapplications/limit=%d/xml")
+        downloadUrl(feedUrl.format(feedLimit))
+    }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt(STATE_FEEDLIMIT_STORED, feedLimit)
+        outState.putString(STATE_CURRENT_LINK, feedUrl)
+    }
 }
